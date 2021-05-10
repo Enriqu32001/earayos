@@ -1,0 +1,82 @@
+RESTORE DATABASE AdventureWorks2019 
+FROM  AdventureWorks2019
+WITH  FILE = 1,  
+MOVE N'AdventureWorks2017' TO N'C:\BDII\DATA\AdventureWorks2019_Data.mdf', 
+MOVE N'AdventureWorks2017_Log' TO N'C:\BDII\LOG\AdventureWorks2019_Log.ldf',  
+NORECOVERY,  NOUNLOAD,  STATS = 5
+
+RESTORE DATABASE AdventureWorks2019 
+FROM  AdventureWorks2019 
+WITH  FILE = 1,  
+MOVE N'AdventureWorks2017' TO N'C:\BDII\DATA\AdventureWorks2019_Data.mdf',  
+MOVE N'AdventureWorks2017_Log' TO N'C:\BDII\LOG\AdventureWorks2019_Log.ldf',  
+NOUNLOAD,  STATS = 5
+
+RESTORE FILELISTONLY FROM AdventureWorks2019
+GO
+RESTORE HEADERONLY FROM AdventureWorks2019
+GO
+
+-- TRAZAS
+--A)
+
+--Backups
+--B)
+
+EXEC sp_addumpdevice 'disk', 'AdventureWorks2019',   
+'C:\BDII\BACKUP\AdventureWorks2019.bak';  
+GO
+
+--C)
+CREATE PROCEDURE crearBackupDif
+AS
+	DECLARE @BackupName VARCHAR(100)
+	SET @BackupName = N'AdventureWorks2019 – Dif Backup ' + FORMAT(GETDATE(),'yyyyMMdd_hhmmss');
+
+	BACKUP DATABASE [AdventureWorks2019] 
+	TO  AdventureWorks2019
+	WITH  DIFFERENTIAL , NOFORMAT, NOINIT, 
+	NAME = @BackupName, SKIP, NOREWIND, NOUNLOAD,  STATS = 10
+
+GO
+
+EXECUTE crearBackupDif
+GO
+--D)
+
+CREATE PROCEDURE rutinaRestaurar
+AS
+	DECLARE @NOMBRE VARCHAR(100)
+	SET @NOMBRE = 'AwExamenBDII'
+
+	DECLARE @File smallint
+	SELECT @File = MAX(Position) 
+	FROM #RestoreHeaderOnlyData 
+	WHERE DatabaseName = 'AdventureWorks2019' 
+    	AND BackupName = @NOMBRE
+    
+	RESTORE DATABASE [AdventureWorks2019] FROM AdventureWorks2019
+    	WITH FILE = @File, 
+    	MOVE N'AdventureWorks2017' TO N'C:\BDII\DATA\AdventureWorks2019_Data.mdf',  
+		MOVE N'AdventureWorks2017_Log' TO N'C:\BDII\LOG\AdventureWorks2019_Log.ldf',  
+	NOUNLOAD, REPLACE, STATS = 10, RECOVERY
+
+
+GO
+
+EXECUTE rutinaRestaurar
+GO
+
+
+--Importar Datos
+--a)
+
+CREATE PROCEDURE ImportDat
+AS
+	SELECT Person.contacType.[Name],Person.contacType.[ModifiedDate] INTO Person.contacType
+	FROM OPENROWSET (BULK 'C:\BDII\dataMay-10-2021.json', SINGLE_CLOB) as j
+	CROSS APPLY OPENJSON(BulkColumn)
+	WITH( [Name] nvarchar(100), ModifiedDate datetime) AS Person.contacType
+GO
+
+
